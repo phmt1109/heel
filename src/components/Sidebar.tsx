@@ -16,6 +16,8 @@ interface SidebarProps {
   contextLimit: number;
   onChangeContextLimit: (limit: number) => void;
   onClearAllData: () => void;
+  onExportBackup: () => void;
+  onImportBackup: (file: File) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -33,6 +35,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   contextLimit,
   onChangeContextLimit,
   onClearAllData,
+  onExportBackup,
+  onImportBackup,
 }) => {
   return (
     <>
@@ -163,6 +167,38 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <option value="20">20 tin gần nhất</option>
               <option value="40">40 tin gần nhất</option>
             </select>
+          </div>
+
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <button
+              id="exportBackupBtn"
+              className="btn-ghost small"
+              style={{ flex: 1, padding: '5px 4px', textAlign: 'center' }}
+              onClick={onExportBackup}
+              title="Tải file sao lưu (JSON) chứa API key và cấu hình"
+            >
+              💾 Sao lưu
+            </button>
+            <label
+              id="importBackupLabel"
+              className="btn-ghost small"
+              style={{ flex: 1, padding: '5px 4px', textAlign: 'center', cursor: 'pointer', display: 'inline-block' }}
+              title="Khôi phục dữ liệu từ file sao lưu JSON"
+            >
+              📥 Khôi phục
+              <input
+                type="file"
+                accept=".json,application/json"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    onImportBackup(file);
+                    e.target.value = '';
+                  }
+                }}
+              />
+            </label>
           </div>
 
           <button

@@ -2,6 +2,13 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ApiFormat, AppState, ChatMessage, NetworkTransport, Preset, Provider, Settings } from './types';
 import { DEFAULT_PRESETS, DEFAULT_SETTINGS, STORAGE_KEY } from './constants';
 import { executeChat, fetchProviderModels, filterModels } from './utils/apiAdapters';
+import {
+  loadAppState,
+  saveAppState,
+  clearAllAppState,
+  exportStateAsJson,
+  importStateFromJson,
+} from './utils/storage';
 import { Sidebar } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
 import { SettingsBar } from './components/SettingsBar';
@@ -21,6 +28,7 @@ export default function App() {
   const [conversations, setConversations] = useState<Record<string, ChatMessage[]>>({});
   const [myPresets, setMyPresets] = useState<Preset[]>([]);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [isLoaded, setIsLoaded] = useState<boolean>(false);
 
   // UI state
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
@@ -48,39 +56,47 @@ export default function App() {
     }, 3200);
   };
 
-  // Load from LocalStorage on mount
+  // Load from IndexedDB & LocalStorage on mount
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed: Partial<AppState> = JSON.parse(raw);
-        if (parsed.providers && Array.isArray(parsed.providers)) {
-          // Remove previously seeded sample providers from dashboard
-          const cleanProviders = parsed.providers.filter(
-            (p) => p.id !== 'prov-openai-sample' && p.id !== 'prov-gemini-sample'
-          );
-          setProviders(cleanProviders);
-          if (parsed.activeProviderId && cleanProviders.some((p) => p.id === parsed.activeProviderId)) {
-            setActiveProviderId(parsed.activeProviderId);
+    let isMounted = true;
+    (async () => {
+      try {
+        const parsed = await loadAppState();
+        if (!isMounted) return;
+        if (parsed) {
+          if (parsed.providers && Array.isArray(parsed.providers)) {
+            const cleanProviders = parsed.providers.filter(
+              (p) => p.id !== 'prov-openai-sample' && p.id !== 'prov-gemini-sample'
+            );
+            setProviders(cleanProviders);
+            if (parsed.activeProviderId && cleanProviders.some((p) => p.id === parsed.activeProviderId)) {
+              setActiveProviderId(parsed.activeProviderId);
+            } else {
+              setActiveProviderId(cleanProviders[0]?.id || null);
+            }
           } else {
-            setActiveProviderId(cleanProviders[0]?.id || null);
+            initDefaultProviders();
           }
+          if (parsed.selectedModels) setSelectedModels(parsed.selectedModels);
+          if (parsed.manualModelMap) setManualModelMap(parsed.manualModelMap);
+          if (parsed.manualModelNames) setManualModelNames(parsed.manualModelNames);
+          if (parsed.conversations) setConversations(parsed.conversations);
+          if (parsed.myPresets) setMyPresets(parsed.myPresets);
+          if (parsed.settings) setSettings({ ...DEFAULT_SETTINGS, ...parsed.settings });
         } else {
           initDefaultProviders();
         }
-        if (parsed.selectedModels) setSelectedModels(parsed.selectedModels);
-        if (parsed.manualModelMap) setManualModelMap(parsed.manualModelMap);
-        if (parsed.manualModelNames) setManualModelNames(parsed.manualModelNames);
-        if (parsed.conversations) setConversations(parsed.conversations);
-        if (parsed.myPresets) setMyPresets(parsed.myPresets);
-        if (parsed.settings) setSettings({ ...DEFAULT_SETTINGS, ...parsed.settings });
-      } else {
-        initDefaultProviders();
+      } catch (e) {
+        console.error('Error loading state:', e);
+        if (isMounted) initDefaultProviders();
+      } finally {
+        if (isMounted) setIsLoaded(true);
       }
-    } catch (e) {
-      console.error('Error reading localStorage:', e);
-      initDefaultProviders();
-    }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const initDefaultProviders = () => {
@@ -89,8 +105,9 @@ export default function App() {
     setSelectedModels({});
   };
 
-  // Save to LocalStorage on state change
+  // Save to IndexedDB and LocalStorage on state change (only after initial load completes)
   useEffect(() => {
+    if (!isLoaded) return;
     const toSave: AppState = {
       providers,
       activeProviderId,
@@ -101,12 +118,9 @@ export default function App() {
       myPresets,
       settings,
     };
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
-    } catch (e) {
-      console.error('Failed to save to localStorage:', e);
-    }
+    saveAppState(toSave);
   }, [
+    isLoaded,
     providers,
     activeProviderId,
     selectedModels,
@@ -293,18 +307,56 @@ export default function App() {
   };
 
   // Clear all saved data
-  const handleClearAllData = () => {
+  const handleClearAllData = async () => {
     if (
       window.confirm(
         'CẢNH BÁO: Thao tác này sẽ xoá TOÀN BỘ dữ liệu API key, lịch sử trò chuyện và cài đặt đã lưu trong trình duyệt. Bạn có chắc chắn?'
       )
     ) {
-      localStorage.removeItem(STORAGE_KEY);
+      await clearAllAppState();
       initDefaultProviders();
       setConversations({});
       setMyPresets([]);
       setSettings(DEFAULT_SETTINGS);
       triggerToast('Đã xoá toàn bộ dữ liệu đã lưu!');
+    }
+  };
+
+  // Export backup JSON file
+  const handleExportBackup = () => {
+    const currentState: AppState = {
+      providers,
+      activeProviderId,
+      selectedModels,
+      manualModelMap,
+      manualModelNames,
+      conversations,
+      myPresets,
+      settings,
+    };
+    exportStateAsJson(currentState);
+    triggerToast('Đã tải xuống file sao lưu JSON!');
+  };
+
+  // Import backup JSON file
+  const handleImportBackup = async (file: File) => {
+    try {
+      const imported = await importStateFromJson(file);
+      if (imported.providers && Array.isArray(imported.providers)) {
+        setProviders(imported.providers);
+        setActiveProviderId(imported.activeProviderId || imported.providers[0]?.id || null);
+      }
+      if (imported.selectedModels) setSelectedModels(imported.selectedModels);
+      if (imported.manualModelMap) setManualModelMap(imported.manualModelMap);
+      if (imported.manualModelNames) setManualModelNames(imported.manualModelNames);
+      if (imported.conversations) setConversations(imported.conversations);
+      if (imported.myPresets) setMyPresets(imported.myPresets);
+      if (imported.settings) setSettings({ ...DEFAULT_SETTINGS, ...imported.settings });
+
+      await saveAppState(imported);
+      triggerToast('Khôi phục dữ liệu thành công!');
+    } catch (err: any) {
+      triggerToast(`Lỗi khôi phục: ${err?.message || 'File không hợp lệ'}`, true);
     }
   };
 
@@ -541,6 +593,8 @@ export default function App() {
         contextLimit={settings.contextLimit}
         onChangeContextLimit={(c) => setSettings((s) => ({ ...s, contextLimit: c }))}
         onClearAllData={handleClearAllData}
+        onExportBackup={handleExportBackup}
+        onImportBackup={handleImportBackup}
       />
 
       <main id="main">
