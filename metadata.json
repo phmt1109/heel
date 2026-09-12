@@ -1,0 +1,6 @@
+{
+  "name": "AI Console — Ghép key nhiều nhà cung cấp",
+  "description": "Ứng dụng web BYOK ghép API key của nhiều nhà cung cấp AI, tự động dò model, trò chuyện với chế độ 18+ không giới hạn, xuất mã nguồn Perchance và file zip.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
