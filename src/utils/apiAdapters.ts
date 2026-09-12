@@ -38,7 +38,25 @@ export function getActiveSystem(settings: Settings): string {
 }
 
 /**
- * Universal API fetch supporting Perchance superFetch, local Express proxy, or direct fetch
+ * Helper to safely parse JSON or throw a descriptive error if HTML/text was received
+ */
+export async function safeParseJson(res: Response, contextLabel: string = 'API'): Promise<any> {
+  const text = await res.text();
+  const trimmed = text.trim();
+  if (trimmed.startsWith('<') || trimmed.toLowerCase().startsWith('<!doctype')) {
+    throw new Error(
+      `Máy chủ trả về trang HTML thay vì dữ liệu JSON (${contextLabel}). Có thể do URL không hợp lệ hoặc không có proxy backend.`
+    );
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`Phản hồi từ ${contextLabel} không phải định dạng JSON hợp lệ: ${trimmed.slice(0, 100)}`);
+  }
+}
+
+/**
+ * Universal API fetch supporting Perchance superFetch, Cloudflare Pages/Static host direct fetch, local Express proxy
  */
 export async function apiFetch(
   url: string,
@@ -53,40 +71,62 @@ export async function apiFetch(
     url.includes('10.') ||
     url.endsWith('.local');
 
-  // If running inside Perchance engine
+  // 1. If running inside Perchance engine
   if (typeof (window as any).root?.superFetch === 'function') {
     return (window as any).root.superFetch(url, options);
   }
 
-  // When webpage is loaded over HTTPS, direct fetch to http:// localhost or private IP
-  // is blocked by the browser due to Mixed Content / Private Network Access restrictions.
-  // We first try direct fetch for localhost/LAN, and if that fails or blocks, fall back through the proxy.
+  // 2. Direct fetch requested
   if (transport === 'direct') {
     return fetch(url, options);
   }
 
+  // 3. Localhost or Local LAN target
   if (isLocalhost) {
     try {
       return await fetch(url, options);
     } catch {
-      // Direct access failed (e.g. Mixed Content HTTPS->HTTP or CORS), try through proxy
+      // Direct access failed (e.g. Mixed Content HTTPS->HTTP or CORS), try through proxy if available
       const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
       return fetch(proxyUrl, options);
     }
   }
 
-  // Use proxy (/api/proxy) to bypass browser CORS for commercial APIs (OpenAI, Anthropic, Gemini, etc.)
-  try {
+  // 4. Force proxy mode
+  if (transport === 'proxy') {
     const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
-    const res = await fetch(proxyUrl, options);
-    if (res.ok || res.status < 500) {
-      return res;
-    }
-    // If proxy failed with 502/504, try direct fetch as fallback
-    return fetch(url, options);
+    return fetch(proxyUrl, options);
+  }
+
+  // 5. Auto mode:
+  // On static hosting like Cloudflare Pages, GitHub Pages, Vercel Static, etc.,
+  // there is NO /api/proxy backend server. Requesting /api/proxy will return Cloudflare's 404 or index.html (<!doctype html>).
+  // Therefore, in browser environment on external domains, we attempt direct fetch first.
+  // If direct fetch is blocked by browser CORS, we only then try /api/proxy as fallback.
+  try {
+    const directRes = await fetch(url, options);
+    return directRes;
   } catch {
-    // If proxy network error, fallback to direct fetch
-    return fetch(url, options);
+    // If direct fetch threw a network error (like CORS blocked in browser), try /api/proxy if a custom backend exists
+    try {
+      const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
+      const proxyRes = await fetch(proxyUrl, options);
+      const contentType = proxyRes.headers.get('content-type') || '';
+      // If the proxy returns HTML (which Cloudflare Pages does when /api/proxy doesn't exist)
+      if (contentType.includes('text/html')) {
+        throw new Error(
+          'Lỗi CORS: Trình duyệt chặn kết nối trực tiếp đến API này trên Cloudflare Pages (môi trường tĩnh không có server proxy). Hãy chọn các nhà cung cấp hỗ trợ CORS như OpenRouter, Groq, hoặc cấu hình CORS cho API.'
+        );
+      }
+      return proxyRes;
+    } catch (proxyErr: any) {
+      if (proxyErr.message && proxyErr.message.includes('CORS')) {
+        throw proxyErr;
+      }
+      throw new Error(
+        'Không thể kết nối đến API (bị chặn CORS hoặc sai URL). Trên Cloudflare Pages, hãy đảm bảo API hỗ trợ gọi trực tiếp từ trình duyệt web.'
+      );
+    }
   }
 }
 
@@ -128,7 +168,7 @@ export async function fetchProviderModels(
     throw new Error(`HTTP ${res.status}: ${errText.slice(0, 180)}`);
   }
 
-  const data = await res.json();
+  const data = await safeParseJson(res, `danh sách models (${format})`);
   const models: string[] = [];
 
   if (format === 'gemini') {
@@ -312,7 +352,7 @@ async function callOpenAI(opts: {
   }
 
   if (!stream || !res.body) {
-    const data = await res.json();
+    const data = await safeParseJson(res, 'OpenAI completions');
     const content = data?.choices?.[0]?.message?.content || '';
     onDelta(content, content);
     return content;
@@ -416,7 +456,7 @@ async function callAnthropic(opts: {
   }
 
   if (!stream || !res.body) {
-    const data = await res.json();
+    const data = await safeParseJson(res, 'Anthropic messages');
     let text = '';
     if (Array.isArray(data.content)) {
       text = data.content.map((c: any) => c.text || '').join('');
@@ -554,7 +594,7 @@ async function callGemini(opts: {
   }
 
   if (!stream || !res.body) {
-    const data = await res.json();
+    const data = await safeParseJson(res, 'Gemini generateContent');
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
     onDelta(text, text);
     return text;

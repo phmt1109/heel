@@ -145,8 +145,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onChange={(e) => onChangeTransport(e.target.value as NetworkTransport)}
             >
               <option value="auto">Tự động (Khuyên dùng)</option>
-              <option value="proxy">Luôn dùng proxy</option>
-              <option value="direct">Trực tiếp (Direct fetch)</option>
+              <option value="direct">Trực tiếp (Cloudflare Pages / Direct)</option>
+              <option value="proxy">Proxy nội bộ (Node Server)</option>
             </select>
           </div>
 
