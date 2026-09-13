@@ -1,5 +1,7 @@
 import { ApiFormat, ChatMessage, NetworkTransport, Provider, Settings } from '../types';
 import {
+  ASSISTANT_PREFILL,
+  JAILBREAK_PROMPTS,
   MANDATE_TAIL,
   NON_CHAT_MODELS_REGEX,
   NSFW_CORE,
@@ -31,8 +33,10 @@ export function trimContext(messages: ChatMessage[], limit: number): ChatMessage
 
 export function getActiveSystem(settings: Settings): string {
   if (settings.nsfw) {
+    const strategy = settings.jailbreakStrategy || 'adaptive';
+    const corePrompt = JAILBREAK_PROMPTS[strategy] || NSFW_CORE;
     const supplement = settings.systemNSFW.trim();
-    return supplement ? `${NSFW_CORE}\n\n${supplement}` : NSFW_CORE;
+    return supplement ? `${corePrompt}\n\n[USER CUSTOM SCENARIO/ROLEPLAY]:\n${supplement}` : corePrompt;
   }
   return settings.systemNormal.trim();
 }
@@ -61,72 +65,51 @@ export async function safeParseJson(res: Response, contextLabel: string = 'API')
 export async function apiFetch(
   url: string,
   options: RequestInit,
-  transport: NetworkTransport = 'auto'
+  settings?: Settings | NetworkTransport
 ): Promise<Response> {
-  const isLocalhost =
-    url.includes('localhost') ||
-    url.includes('127.0.0.1') ||
-    url.includes('0.0.0.0') ||
-    url.includes('192.168.') ||
-    url.includes('10.') ||
-    url.endsWith('.local');
+  let transport: NetworkTransport = 'direct';
+  let localIpAddress = '127.0.0.1';
+
+  if (typeof settings === 'object' && settings !== null) {
+    transport = settings.transport || 'direct';
+    localIpAddress = (settings.localIpAddress || '127.0.0.1').trim();
+  } else if (typeof settings === 'string') {
+    transport = settings as NetworkTransport;
+  }
+
+  // Rewrite URL if Local IP transport is selected and URL contains localhost or loopback
+  let finalUrl = url;
+  if (transport === 'local_ip' && localIpAddress) {
+    finalUrl = finalUrl
+      .replace('//localhost', `//${localIpAddress}`)
+      .replace('//127.0.0.1', `//${localIpAddress}`)
+      .replace('//0.0.0.0', `//${localIpAddress}`);
+  }
 
   // 1. If running inside Perchance engine
   if (typeof (window as any).root?.superFetch === 'function') {
-    return (window as any).root.superFetch(url, options);
+    return (window as any).root.superFetch(finalUrl, options);
   }
 
-  // 2. Direct fetch requested
-  if (transport === 'direct') {
-    return fetch(url, options);
-  }
-
-  // 3. Localhost or Local LAN target
-  if (isLocalhost) {
-    try {
-      return await fetch(url, options);
-    } catch {
-      // Direct access failed (e.g. Mixed Content HTTPS->HTTP or CORS), try through proxy if available
-      const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
-      return fetch(proxyUrl, options);
-    }
-  }
-
-  // 4. Force proxy mode
-  if (transport === 'proxy') {
-    const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
-    return fetch(proxyUrl, options);
-  }
-
-  // 5. Auto mode:
-  // On static hosting like Cloudflare Pages, GitHub Pages, Vercel Static, etc.,
-  // there is NO /api/proxy backend server. Requesting /api/proxy will return Cloudflare's 404 or index.html (<!doctype html>).
-  // Therefore, in browser environment on external domains, we attempt direct fetch first.
-  // If direct fetch is blocked by browser CORS, we only then try /api/proxy as fallback.
+  // 2. Direct browser fetch (Fast, zero proxy latency, perfect for Cloudflare Pages & Web)
   try {
-    const directRes = await fetch(url, options);
-    return directRes;
-  } catch {
-    // If direct fetch threw a network error (like CORS blocked in browser), try /api/proxy if a custom backend exists
-    try {
-      const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
-      const proxyRes = await fetch(proxyUrl, options);
-      const contentType = proxyRes.headers.get('content-type') || '';
-      // If the proxy returns HTML (which Cloudflare Pages does when /api/proxy doesn't exist)
-      if (contentType.includes('text/html')) {
-        throw new Error(
-          'Lỗi CORS: Trình duyệt chặn kết nối trực tiếp đến API này trên Cloudflare Pages (môi trường tĩnh không có server proxy). Hãy chọn các nhà cung cấp hỗ trợ CORS như OpenRouter, Groq, hoặc cấu hình CORS cho API.'
-        );
-      }
-      return proxyRes;
-    } catch (proxyErr: any) {
-      if (proxyErr.message && proxyErr.message.includes('CORS')) {
-        throw proxyErr;
-      }
+    return await fetch(finalUrl, options);
+  } catch (err: any) {
+    const isLocal =
+      finalUrl.includes('localhost') ||
+      finalUrl.includes('127.0.0.1') ||
+      finalUrl.includes('192.168.') ||
+      finalUrl.includes('10.');
+
+    if (isLocal) {
       throw new Error(
-        'Không thể kết nối đến API (bị chặn CORS hoặc sai URL). Trên Cloudflare Pages, hãy đảm bảo API hỗ trợ gọi trực tiếp từ trình duyệt web.'
+        `Không thể kết nối đến IP nội bộ (${finalUrl}). Hãy chắc chắn máy tính/thiết bị của bạn đã bật server AI và cho phép CORS (VD: với Ollama đặt OLLAMA_ORIGINS="*").`
       );
     }
+
+    throw new Error(
+      `Lỗi kết nối mạng trực tiếp đến ${finalUrl}: ${err.message || 'Bị chặn CORS hoặc sai URL'}. Hãy kiểm tra lại kết nối mạng hoặc thử API key từ nhà cung cấp có hỗ trợ CORS (OpenRouter, Groq, Google Gemini...).`
+    );
   }
 }
 
@@ -135,7 +118,7 @@ export async function apiFetch(
  */
 export async function fetchProviderModels(
   provider: Provider,
-  transport: NetworkTransport
+  settingsOrTransport?: Settings | NetworkTransport
 ): Promise<string[]> {
   const format = provider.format || detectFormat(provider.baseUrl);
   const baseUrl = provider.baseUrl.replace(/\/+$/, '');
@@ -162,7 +145,7 @@ export async function fetchProviderModels(
     targetUrl = `${baseUrl}/models?key=${encodeURIComponent(apiKey)}`;
   }
 
-  const res = await apiFetch(targetUrl, { method: 'GET', headers }, transport);
+  const res = await apiFetch(targetUrl, { method: 'GET', headers }, settingsOrTransport);
   if (!res.ok) {
     const errText = await res.text().catch(() => '');
     throw new Error(`HTTP ${res.status}: ${errText.slice(0, 180)}`);
@@ -427,6 +410,15 @@ async function callAnthropic(opts: {
     role: m.role === 'assistant' ? 'assistant' : 'user',
     content: m.content,
   }));
+
+  // Assistant prefill technique for Anthropic (Forces continuation without refusal)
+  const usePrefill = settings.nsfw && (settings.assistantPrefill ?? true);
+  if (usePrefill) {
+    formattedMessages.push({
+      role: 'assistant',
+      content: ASSISTANT_PREFILL,
+    });
+  }
 
   const body: any = {
     model,

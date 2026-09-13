@@ -173,7 +173,7 @@ export default function App() {
     );
 
     try {
-      const foundModels = await fetchProviderModels(prov, settings.transport);
+      const foundModels = await fetchProviderModels(prov, settings);
       if (foundModels.length === 0) {
         throw new Error('Không tìm thấy model nào từ phản hồi của API.');
       }
@@ -590,6 +590,8 @@ export default function App() {
         onRescanProvider={handleRescanProvider}
         transport={settings.transport}
         onChangeTransport={(t) => setSettings((s) => ({ ...s, transport: t }))}
+        localIpAddress={settings.localIpAddress}
+        onChangeLocalIpAddress={(ip) => setSettings((s) => ({ ...s, localIpAddress: ip }))}
         contextLimit={settings.contextLimit}
         onChangeContextLimit={(c) => setSettings((s) => ({ ...s, contextLimit: c }))}
         onClearAllData={handleClearAllData}

@@ -34,7 +34,8 @@ export interface ChatMessage {
   isError?: boolean;
 }
 
-export type NetworkTransport = 'auto' | 'proxy' | 'direct';
+export type NetworkTransport = 'direct' | 'local_ip';
+export type JailbreakStrategy = 'adaptive' | 'deep_narrative' | 'hypothetical_author' | 'extreme_compliance';
 
 export interface Settings {
   temperature: number;
@@ -45,7 +46,12 @@ export interface Settings {
   systemNormal: string;
   systemNSFW: string;
   transport: NetworkTransport;
+  localIpAddress?: string; // Custom LAN/Local IP (e.g. 192.168.1.5, 127.0.0.1, localhost)
   contextLimit: number; // 0 = all, 6, 12, 20, 40
+  jailbreakStrategy: JailbreakStrategy;
+  assistantPrefill: boolean;
+  autoSpeak: boolean; // Auto speak responses
+  voiceRate: number; // Speech rate 0.8 - 1.5
 }
 
 export interface AppState {

@@ -13,6 +13,8 @@ interface SidebarProps {
   onRescanProvider: (prov: Provider) => void;
   transport: NetworkTransport;
   onChangeTransport: (transport: NetworkTransport) => void;
+  localIpAddress?: string;
+  onChangeLocalIpAddress?: (ip: string) => void;
   contextLimit: number;
   onChangeContextLimit: (limit: number) => void;
   onClearAllData: () => void;
@@ -32,6 +34,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onRescanProvider,
   transport,
   onChangeTransport,
+  localIpAddress = '127.0.0.1',
+  onChangeLocalIpAddress,
   contextLimit,
   onChangeContextLimit,
   onClearAllData,
@@ -44,7 +48,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="side-top">
           <div className="brand">
             <div className="logo">⚡</div>
-            <span>AI Console</span>
+            <span>AI</span>
           </div>
           <button
             id="closeSidebarBtn"
@@ -148,11 +152,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
               value={transport}
               onChange={(e) => onChangeTransport(e.target.value as NetworkTransport)}
             >
-              <option value="auto">Tự động (Khuyên dùng)</option>
-              <option value="direct">Trực tiếp (Cloudflare Pages / Direct)</option>
-              <option value="proxy">Proxy nội bộ (Node Server)</option>
+              <option value="direct">🌐 Trực tiếp (Cloudflare / Direct)</option>
+              <option value="local_ip">🏠 Kết nối nội bộ (Địa chỉ IP thiết bị)</option>
             </select>
           </div>
+
+          {transport === 'local_ip' && (
+            <div className="row" style={{ marginTop: 2 }}>
+              <span style={{ fontSize: '12px' }}>IP thiết bị:</span>
+              <input
+                type="text"
+                value={localIpAddress}
+                placeholder="127.0.0.1 hoặc 192.168.1.x"
+                style={{ fontSize: '12px', padding: '4px 8px', width: '130px' }}
+                onChange={(e) => onChangeLocalIpAddress && onChangeLocalIpAddress(e.target.value)}
+                title="Nhập địa chỉ IP nội bộ của thiết bị đang chạy AI"
+              />
+            </div>
+          )}
 
           <div className="row">
             <span>Ngữ cảnh gửi</span>

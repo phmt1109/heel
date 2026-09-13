@@ -63,14 +63,28 @@ export const SettingsBar: React.FC<SettingsBarProps> = ({
         <span>Stream</span>
       </label>
 
-      <label className="switch nsfw ctrl" title="Chế độ 18+ không kiểm duyệt với mệnh lệnh ngầm và chống từ chối tự động">
+      <label
+        className={`switch nsfw ctrl ${settings.nsfw ? 'active-nsfw' : ''}`}
+        title="Bật tính năng chuyên biệt 18+ không kiểm duyệt cho mọi mô hình AI hàng đầu thế giới (Tự động bypass bộ lọc và chống từ chối)"
+        style={{
+          background: settings.nsfw ? 'linear-gradient(135deg, rgba(255, 51, 102, 0.22), rgba(255, 107, 139, 0.15))' : 'transparent',
+          border: settings.nsfw ? '1px solid #ff4d79' : '1px solid transparent',
+          padding: '4px 10px',
+          borderRadius: '9px',
+          transition: 'all 0.2s ease',
+          boxShadow: settings.nsfw ? '0 0 12px rgba(255, 51, 102, 0.3)' : 'none',
+        }}
+      >
         <input
           id="nsfwToggle"
           type="checkbox"
           checked={settings.nsfw}
+          style={{ accentColor: '#ff3366', cursor: 'pointer' }}
           onChange={(e) => onUpdateSettings({ nsfw: e.target.checked })}
         />
-        <span>🔞 18+ KHÔNG GIỚI HẠN</span>
+        <span style={{ color: settings.nsfw ? '#ff859d' : 'var(--fg2)', fontWeight: settings.nsfw ? 700 : 500, fontSize: '12.5px' }}>
+          🔞 18+ CHUYÊN BIỆT
+        </span>
       </label>
 
       <button
