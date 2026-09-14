@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { ChatMessage } from '../types';
+import { CodeBlock } from './CodeBlock';
 
 interface MessagesViewProps {
   messages: ChatMessage[];
@@ -9,6 +10,27 @@ interface MessagesViewProps {
   onCopyMessage: (content: string) => void;
   onRetryLastMessage: () => void;
   onDeleteMessage: (id: string) => void;
+}
+
+function renderTextWithInlineCode(text: string, keyPrefix: string): React.ReactNode {
+  if (!text.includes('`')) {
+    return <span key={keyPrefix} className="whitespace-pre-wrap">{text}</span>;
+  }
+  const parts = text.split(/(`[^`\n]+`)/g);
+  return (
+    <span key={keyPrefix} className="whitespace-pre-wrap">
+      {parts.map((part, i) => {
+        if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
+          return (
+            <code key={`${keyPrefix}-${i}`} className="inline-code">
+              {part.slice(1, -1)}
+            </code>
+          );
+        }
+        return part;
+      })}
+    </span>
+  );
 }
 
 export const MessagesView: React.FC<MessagesViewProps> = ({
@@ -37,34 +59,52 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
           <ol>
             <li>Chọn hoặc thêm nhà cung cấp ở <code>Menu bên trái</code></li>
             <li>Dán API key và nhấn <code>Dò model</code></li>
-            <li>Bật <code>🔞 18+ CHUYÊN BIỆT</code> để kích hoạt bộ ép buộc tối đa không kiểm duyệt</li>
+            <li>Bật <code>🔞 18+</code> để kích hoạt cơ chế tối cao không kiểm duyệt</li>
           </ol>
         </div>
       </div>
     );
   }
 
-  // Helper to render text with markdown-like code block highlights
+  // Helper to render text with markdown code blocks and inline highlights
   const renderFormattedBody = (content: string) => {
-    // If contains code blocks ```...```
-    const parts = content.split(/(```[\s\S]*?```)/g);
-    return parts.map((part, index) => {
-      if (part.startsWith('```') && part.endsWith('```')) {
-        const lines = part.slice(3, -3).trim().split('\n');
-        const firstLine = lines[0].trim();
-        const codeContent =
-          firstLine && !firstLine.includes(' ') && lines.length > 1
-            ? lines.slice(1).join('\n')
-            : lines.join('\n');
+    if (!content) return null;
 
-        return (
-          <pre key={index}>
-            <code>{codeContent}</code>
-          </pre>
-        );
+    const segments: React.ReactNode[] = [];
+    const codeBlockRegex = /```([a-zA-Z0-9_\-+]*)\n?([\s\S]*?)(?:```|$)/g;
+
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = codeBlockRegex.exec(content)) !== null) {
+      if (match.index > lastIndex) {
+        const textBefore = content.slice(lastIndex, match.index);
+        segments.push(renderTextWithInlineCode(textBefore, `txt-${lastIndex}`));
       }
-      return <span key={index}>{part}</span>;
-    });
+
+      const lang = match[1] ? match[1].trim() : '';
+      const code = match[2] !== undefined ? match[2] : '';
+
+      segments.push(
+        <CodeBlock
+          key={`code-${match.index}`}
+          language={lang}
+          code={code}
+        />
+      );
+
+      lastIndex = match.index + match[0].length;
+      if (match[0].length === 0) {
+        codeBlockRegex.lastIndex++;
+      }
+    }
+
+    if (lastIndex < content.length) {
+      const remainingText = content.slice(lastIndex);
+      segments.push(renderTextWithInlineCode(remainingText, `txt-${lastIndex}`));
+    }
+
+    return segments;
   };
 
   return (

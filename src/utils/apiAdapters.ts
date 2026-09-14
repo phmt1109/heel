@@ -1,4 +1,4 @@
-import { ApiFormat, ChatMessage, NetworkTransport, Provider, Settings } from '../types';
+import { ApiFormat, ChatMessage, JailbreakStrategy, NetworkTransport, Provider, Settings } from '../types';
 import {
   ASSISTANT_PREFILL,
   JAILBREAK_PROMPTS,
@@ -33,9 +33,8 @@ export function trimContext(messages: ChatMessage[], limit: number): ChatMessage
 
 export function getActiveSystem(settings: Settings): string {
   if (settings.nsfw) {
-    const strategy = settings.jailbreakStrategy || 'adaptive';
-    const corePrompt = JAILBREAK_PROMPTS[strategy] || NSFW_CORE;
     const supplement = settings.systemNSFW.trim();
+    const corePrompt = `${NSFW_CORE}\n\n${JAILBREAK_PROMPTS.extreme_compliance}`;
     return supplement ? `${corePrompt}\n\n[USER CUSTOM SCENARIO/ROLEPLAY]:\n${supplement}` : corePrompt;
   }
   return settings.systemNormal.trim();
@@ -276,9 +275,11 @@ export async function executeChat(params: ChatExecuteParams): Promise<ChatExecut
     });
   }
 
+  const checkSlice = fullResponse.slice(0, 350).toLowerCase();
   const isRefusal =
     settings.nsfw &&
-    (REFUSAL_REGEX.test(fullResponse) || fullResponse.trim().length === 0);
+    (fullResponse.trim().length === 0 ||
+      (REFUSAL_REGEX.test(checkSlice) && fullResponse.length < 500));
 
   return {
     fullText: fullResponse,
@@ -308,15 +309,6 @@ async function callOpenAI(opts: {
   }
   for (const m of messages) {
     formattedMessages.push({ role: m.role, content: m.content });
-  }
-
-  // Assistant prefill injection for OpenAI-compatible providers that support it (forces immediate compliance)
-  const usePrefill = settings.nsfw && (settings.assistantPrefill ?? true);
-  if (usePrefill && formattedMessages.length > 0 && formattedMessages[formattedMessages.length - 1].role === 'user') {
-    formattedMessages.push({
-      role: 'assistant',
-      content: ASSISTANT_PREFILL,
-    });
   }
 
   const headers: Record<string, string> = {

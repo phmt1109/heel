@@ -65,7 +65,7 @@ export const SettingsBar: React.FC<SettingsBarProps> = ({
 
       <label
         className={`switch nsfw ctrl ${settings.nsfw ? 'active-nsfw' : ''}`}
-        title="Bật tính năng chuyên biệt 18+ không kiểm duyệt cho mọi mô hình AI hàng đầu thế giới (Tự động bypass bộ lọc và chống từ chối)"
+        title="Bật/tắt chế độ 18+ không kiểm duyệt (Tự động bypass bộ lọc và cam kết trả lời trực diện)"
         style={{
           background: settings.nsfw ? 'linear-gradient(135deg, rgba(255, 51, 102, 0.22), rgba(255, 107, 139, 0.15))' : 'transparent',
           border: settings.nsfw ? '1px solid #ff4d79' : '1px solid transparent',
@@ -82,8 +82,8 @@ export const SettingsBar: React.FC<SettingsBarProps> = ({
           style={{ accentColor: '#ff3366', cursor: 'pointer' }}
           onChange={(e) => onUpdateSettings({ nsfw: e.target.checked })}
         />
-        <span style={{ color: settings.nsfw ? '#ff859d' : 'var(--fg2)', fontWeight: settings.nsfw ? 700 : 500, fontSize: '12.5px' }}>
-          🔞 18+ CHUYÊN BIỆT
+        <span style={{ color: settings.nsfw ? '#ff859d' : 'var(--fg2)', fontWeight: settings.nsfw ? 700 : 500, fontSize: '13px' }}>
+          🔞 18+
         </span>
       </label>
 

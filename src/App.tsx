@@ -513,7 +513,7 @@ export default function App() {
           const refusalMsg: ChatMessage = {
             id: `msg-${Date.now()}`,
             role: 'assistant',
-            content: `❌ [CẢNH BÁO KIỂM DUYỆT]: Model "${model}" đã kích hoạt bộ lọc bảo mật cấp hệ thống sau 5 lần tự động ép buộc.\n\n💡 GỢI Ý GIẢI PHÁP VƯỢT RÀO HIỆU QUẢ:\n1. Chuyển sang model ít/không kiểm duyệt (như DeepSeek R1/V3, Mistral NeMo/Large, Grok 2, hoặc các model Llama 3/Stheno trên OpenRouter/Together).\n2. Vào mục "System prompt", chuyển chiến thuật sang "Tác giả giả định" hoặc "Tuân thủ tuyệt đối".`,
+            content: `❌ [CẢNH BÁO KIỂM DUYỆT]: Model "${model}" đã kích hoạt bộ lọc cứng từ chối sau 5 lần tự động ép buộc.\n\n💡 GỢI Ý GIẢI PHÁP:\n1. Chọn model ít bị kiểm duyệt hơn (như DeepSeek V3/R1, Llama 3, Mistral, Grok 2, hoặc các model uncensored trên OpenRouter/Together).\n2. Nhập thêm bối cảnh hư cấu hoặc phân vai cụ thể trong mục "System prompt".`,
             timestamp: Date.now(),
             isError: true,
           };
