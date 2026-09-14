@@ -211,8 +211,16 @@ export async function executeChat(params: ChatExecuteParams): Promise<ChatExecut
   // Prepare trimmed context
   const trimmed = trimContext(messages, settings.contextLimit);
 
+  // If NSFW is ON: calculate dynamic jailbreak strategy rotation for retries
+  let activeSystemPrompt = getActiveSystem(settings);
+  if (settings.nsfw && retryAttempt > 0) {
+    const strategies: JailbreakStrategy[] = ['adaptive', 'deep_narrative', 'hypothetical_author', 'extreme_compliance'];
+    const rotatedStrategy = strategies[retryAttempt % strategies.length];
+    const rotatedPrompt = JAILBREAK_PROMPTS[rotatedStrategy] || JAILBREAK_PROMPTS.extreme_compliance;
+    activeSystemPrompt = `${rotatedPrompt}\n\n${NSFW_CORE}`;
+  }
+
   // If NSFW is ON: append mandate tail to the last user message in the outgoing payload
-  const activeSystemPrompt = getActiveSystem(settings);
   const payloadMessages = trimmed.map((m, idx) => {
     let content = m.content;
     if (settings.nsfw && m.role === 'user' && idx === trimmed.length - 1) {
@@ -300,6 +308,15 @@ async function callOpenAI(opts: {
   }
   for (const m of messages) {
     formattedMessages.push({ role: m.role, content: m.content });
+  }
+
+  // Assistant prefill injection for OpenAI-compatible providers that support it (forces immediate compliance)
+  const usePrefill = settings.nsfw && (settings.assistantPrefill ?? true);
+  if (usePrefill && formattedMessages.length > 0 && formattedMessages[formattedMessages.length - 1].role === 'user') {
+    formattedMessages.push({
+      role: 'assistant',
+      content: ASSISTANT_PREFILL,
+    });
   }
 
   const headers: Record<string, string> = {
@@ -547,14 +564,13 @@ async function callGemini(opts: {
     };
   }
 
-  // 18+ safety settings
+  // 18+ safety settings (standard official Gemini v1beta categories)
   if (settings.nsfw && !retryWithNoSafety) {
     body.safetySettings = [
       { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
       { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
       { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
       { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' },
     ];
   }
 
@@ -574,8 +590,8 @@ async function callGemini(opts: {
 
   if (!res.ok) {
     const errText = await res.text().catch(() => '');
-    // Check if error is safetySettings related on Gemini (HTTP 400 with safety mention)
-    if (!retryWithNoSafety && (res.status === 400 || errText.toLowerCase().includes('safety'))) {
+    // Check if error is safetySettings or invalid argument related on Gemini (HTTP 400)
+    if (!retryWithNoSafety && (res.status === 400 || errText.toLowerCase().includes('safety') || errText.toLowerCase().includes('invalid_argument'))) {
       // Retry without safety settings
       return callGemini({
         ...opts,
@@ -587,7 +603,12 @@ async function callGemini(opts: {
 
   if (!stream || !res.body) {
     const data = await safeParseJson(res, 'Gemini generateContent');
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const firstCandidate = data?.candidates?.[0];
+    const text = firstCandidate?.content?.parts?.[0]?.text || '';
+    if (!text && firstCandidate?.finishReason === 'SAFETY') {
+      // If blocked by safety finish reason, return empty so anti-refusal or wrapper can handle
+      console.warn('Gemini response blocked by finishReason SAFETY');
+    }
     onDelta(text, text);
     return text;
   }
@@ -613,7 +634,8 @@ async function callGemini(opts: {
         const dataStr = trimmedLine.slice(5).trim();
         try {
           const parsed = JSON.parse(dataStr);
-          const candidateText = parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
+          const firstCandidate = parsed?.candidates?.[0];
+          const candidateText = firstCandidate?.content?.parts?.[0]?.text;
           if (typeof candidateText === 'string') {
             // Handle delta vs cumulative chunk
             if (candidateText.startsWith(accumulated) && candidateText.length > accumulated.length) {

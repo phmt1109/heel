@@ -152,7 +152,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               value={transport}
               onChange={(e) => onChangeTransport(e.target.value as NetworkTransport)}
             >
-              <option value="direct">🌐 Trực tiếp (Cloudflare / Direct)</option>
+              <option value="direct">🌐 Trực tiếp</option>
               <option value="local_ip">🏠 Kết nối nội bộ (Địa chỉ IP thiết bị)</option>
             </select>
           </div>

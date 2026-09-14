@@ -1,6 +1,6 @@
 {
   "name": "AI",
-  "description": "Ứng dụng web BYOK ghép API key của nhiều nhà cung cấp AI, tự động dò model, nhập giọng nói bằng mic và đọc to văn bản, chế độ 18+ không kiểm duyệt cho mọi mô hình hàng đầu thế giới.",
-  "requestFramePermissions": ["microphone"],
+  "description": "Ứng dụng web BYOK ghép API key của nhiều nhà cung cấp AI, tự động dò model, chế độ 18+ không kiểm duyệt cho mọi mô hình hàng đầu thế giới.",
+  "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

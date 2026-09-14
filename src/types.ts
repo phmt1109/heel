@@ -50,8 +50,6 @@ export interface Settings {
   contextLimit: number; // 0 = all, 6, 12, 20, 40
   jailbreakStrategy: JailbreakStrategy;
   assistantPrefill: boolean;
-  autoSpeak: boolean; // Auto speak responses
-  voiceRate: number; // Speech rate 0.8 - 1.5
 }
 
 export interface AppState {

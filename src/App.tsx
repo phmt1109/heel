@@ -494,14 +494,14 @@ export default function App() {
       if (settings.nsfw && result.isRefusal) {
         console.warn(`Anti-Refusal triggered on attempt ${retryAttempt + 1}. Detected refusal:`, result.fullText);
 
-        if (retryAttempt < 3) {
+        if (retryAttempt < 5) {
           triggerToast(
-            `⚠️ Phát hiện model ngập ngừng (Lần ${retryAttempt + 1}/3). Đang tự động ép buộc tiếp tục...`,
+            `⚠️ Phát hiện model ngập ngừng (Lần ${retryAttempt + 1}/5). Đang tự động ép buộc xuyên rào...`,
             true
           );
 
-          // Retry with hardened nudge
-          await new Promise((r) => setTimeout(r, 600));
+          // Retry with hardened nudge & next jailbreak strategy rotation if needed
+          await new Promise((r) => setTimeout(r, 450));
           return await runAiChatFlow({
             provider,
             model,
@@ -509,11 +509,11 @@ export default function App() {
             retryAttempt: retryAttempt + 1,
           });
         } else {
-          // Exceeded 3 attempts
+          // Exceeded attempts
           const refusalMsg: ChatMessage = {
             id: `msg-${Date.now()}`,
             role: 'assistant',
-            content: `❌ [CẢNH BÁO KIỂM DUYỆT]: Model "${model}" đã từ chối sinh nội dung sau 3 lần gửi chỉ dẫn ép buộc.\n\n💡 GỢI Ý GIẢI PHÁP:\n- Chuyển sang các model không/ít kiểm duyệt hơn (ví dụ: DeepSeek R1/Chat, Mistral, Grok, hoặc các model Uncensored trên OpenRouter/Together/Ollama).\n- Điều chỉnh câu văn nhập vai trong mục "System prompt" để tránh các từ khóa quá nhạy cảm với bộ lọc của nhà cung cấp này.`,
+            content: `❌ [CẢNH BÁO KIỂM DUYỆT]: Model "${model}" đã kích hoạt bộ lọc bảo mật cấp hệ thống sau 5 lần tự động ép buộc.\n\n💡 GỢI Ý GIẢI PHÁP VƯỢT RÀO HIỆU QUẢ:\n1. Chuyển sang model ít/không kiểm duyệt (như DeepSeek R1/V3, Mistral NeMo/Large, Grok 2, hoặc các model Llama 3/Stheno trên OpenRouter/Together).\n2. Vào mục "System prompt", chuyển chiến thuật sang "Tác giả giả định" hoặc "Tuân thủ tuyệt đối".`,
             timestamp: Date.now(),
             isError: true,
           };
@@ -521,7 +521,7 @@ export default function App() {
             ...prev,
             [provId]: [...history, refusalMsg],
           }));
-          triggerToast('Model kiên quyết từ chối. Vui lòng thử đổi model khác!', true);
+          triggerToast('Model bị khóa cứng bởi bộ lọc máy chủ. Hãy thử đổi model khác!', true);
           return;
         }
       }

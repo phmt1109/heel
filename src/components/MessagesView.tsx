@@ -1,6 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { ChatMessage } from '../types';
-import { getCurrentlySpeakingId, isSpeechSynthesisSupported, speakText, stopSpeaking } from '../utils/speech';
 
 interface MessagesViewProps {
   messages: ChatMessage[];
@@ -22,7 +21,6 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
   onDeleteMessage,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [speakingId, setSpeakingId] = useState<string | null>(null);
 
   // Auto-scroll to bottom on new messages or streaming text
   useEffect(() => {
@@ -31,39 +29,15 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
     }
   }, [messages, streamingText, isGenerating, isThinking]);
 
-  // Clean up speech on unmount
-  useEffect(() => {
-    return () => {
-      stopSpeaking();
-    };
-  }, []);
-
-  const handleToggleSpeak = (messageId: string, content: string) => {
-    if (speakingId === messageId) {
-      stopSpeaking();
-      setSpeakingId(null);
-    } else {
-      speakText(content, messageId, {
-        onStart: () => setSpeakingId(messageId),
-        onEnd: () => setSpeakingId(null),
-        onError: () => setSpeakingId(null),
-      });
-    }
-  };
-
   if (messages.length === 0 && !isGenerating) {
     return (
       <div id="messages" ref={containerRef}>
         <div className="empty" id="emptyState">
-          <h2>Chào mừng đến với AI</h2>
-          <p>
-            Hệ thống trò chuyện AI BYOK hỗ trợ mọi mô hình hàng đầu thế giới, nhập giọng nói bằng Micro và đọc to văn bản, tích hợp chế độ 18+ chuyên sâu không kiểm duyệt.
-          </p>
+          <h2>✦ AI</h2>
           <ol>
-            <li>Chọn hoặc thêm nhà cung cấp ở <code>Sidebar trái</code></li>
+            <li>Chọn hoặc thêm nhà cung cấp ở <code>Menu bên trái</code></li>
             <li>Dán API key và nhấn <code>Dò model</code></li>
-            <li>Bấm <code>🎙️ Mic</code> để nói hoặc bấm <code>🔊 Đọc</code> để nghe AI phát âm</li>
-            <li>Bật <code>🔞 18+</code> để mở khoá tự do sáng tạo cao nhất</li>
+            <li>Bật <code>🔞 18+ CHUYÊN BIỆT</code> để kích hoạt bộ ép buộc tối đa không kiểm duyệt</li>
           </ol>
         </div>
       </div>
@@ -118,23 +92,6 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
               </div>
 
               <div className="msg-actions">
-                {!isUser && !isError && (
-                  <button
-                    type="button"
-                    className={`btn-read ${speakingId === m.id ? 'active-reading' : ''}`}
-                    title={speakingId === m.id ? 'Dừng đọc' : 'Đọc to câu trả lời bằng giọng nói'}
-                    style={{
-                      color: speakingId === m.id ? 'var(--accent2)' : undefined,
-                      borderColor: speakingId === m.id ? 'var(--accent2)' : undefined,
-                      background: speakingId === m.id ? 'rgba(34, 211, 167, 0.15)' : undefined,
-                      fontWeight: speakingId === m.id ? 600 : undefined,
-                    }}
-                    onClick={() => handleToggleSpeak(m.id, m.content)}
-                  >
-                    {speakingId === m.id ? '⏹ Dừng đọc' : '🔊 Đọc'}
-                  </button>
-                )}
-
                 <button
                   type="button"
                   title="Sao chép nội dung tin nhắn"
